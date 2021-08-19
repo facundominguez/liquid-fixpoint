@@ -49,6 +49,13 @@ module Language.Fixpoint.Smt.Interface (
     , smtBracket, smtBracketAt
     , smtDistinct
     , smtPush, smtPop
+    , smtAssertAsync
+    , smtFlush
+    , smtCheckUnsatAsync
+    , readCheckUnsat
+    , smtBracketAsyncAt
+    , smtPushAsync
+    , smtPopAsync
 
     -- * Check Validity
     , checkValid
@@ -92,7 +99,7 @@ import           System.Directory
 import           System.Console.CmdArgs.Verbosity
 import           System.Exit              hiding (die)
 import           System.FilePath
-import           System.IO                (Handle, IOMode (..), hClose, hFlush, openFile)
+import           System.IO
 import           System.Process
 import qualified Data.Attoparsec.Text     as A
 -- import qualified Data.HashMap.Strict      as M
@@ -248,6 +255,7 @@ makeContext cfg f
        pre  <- smtPreamble cfg (solver cfg) me
        createDirectoryIfMissing True $ takeDirectory smtFile
        hLog <- openFile smtFile WriteMode
+       hSetBuffering hLog $ BlockBuffering $ Just $ 1024*1024*64
        let me' = me { ctxLog = Just hLog }
        mapM_ (smtWrite me') pre
        return me'
@@ -273,6 +281,8 @@ makeProcess :: Config -> IO Context
 makeProcess cfg
   = do (hOut, hIn, _ ,pid) <- runInteractiveCommand $ smtCmd (solver cfg)
        loud <- isLoud
+       hSetBuffering hOut $ BlockBuffering $ Just $ 1024*1024*64
+       hSetBuffering hIn $ BlockBuffering $ Just $ 1024*1024*64
        return Ctx { ctxPid     = pid
                   , ctxCin     = hIn
                   , ctxCout    = hOut
@@ -375,6 +385,53 @@ smtCheckSat me p
 
 smtAssert :: Context -> Expr -> IO ()
 smtAssert me p  = interact' me (Assert Nothing p)
+
+smtAssertAsync :: Context -> Expr -> IO ()
+smtAssertAsync me p  = do
+  let cmd = Assert Nothing p
+      env = ctxSymEnv me
+      cmdText = Builder.toLazyText $ runSmt2 env cmd
+  LTIO.hPutStrLn (ctxCout me) cmdText
+  maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog me)
+
+smtFlush :: Context -> IO ()
+smtFlush me = hFlush (ctxCout me)
+
+smtCheckUnsatAsync :: Context -> IO ()
+smtCheckUnsatAsync me = do
+  let cmd = CheckSat
+      env = ctxSymEnv me
+      cmdText = Builder.toLazyText $ runSmt2 env cmd
+  LTIO.hPutStrLn (ctxCout me) cmdText
+  maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog me)
+
+smtBracketAsyncAt :: SrcSpan -> Context -> String -> IO a -> IO a
+smtBracketAsyncAt sp x y z = smtBracketAsync x y z `catch` dieAt sp
+
+smtBracketAsync :: Context -> String -> IO a -> IO a
+smtBracketAsync me _msg a   = do
+  smtPushAsync me
+  r <- a
+  smtPopAsync me
+  return r
+
+smtPushAsync, smtPopAsync   :: Context -> IO ()
+smtPushAsync me = do
+  let cmd = Push
+      env = ctxSymEnv me
+      cmdText = Builder.toLazyText $ runSmt2 env cmd
+  LTIO.hPutStrLn (ctxCout me) cmdText
+  maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog me)
+smtPopAsync me = do
+  let cmd = Pop
+      env = ctxSymEnv me
+      cmdText = Builder.toLazyText $ runSmt2 env cmd
+  LTIO.hPutStrLn (ctxCout me) cmdText
+  maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog me)
+
+
+readCheckUnsat :: Context -> IO Bool
+readCheckUnsat me = respSat <$> smtRead me
 
 smtAssertAxiom :: Context -> Triggered Expr -> IO ()
 smtAssertAxiom me p  = interact' me (AssertAx p)
