@@ -26,6 +26,8 @@ module Language.Fixpoint.Smt.Types (
 
     ) where
 
+import           Control.Concurrent.Async (Async)
+import           Control.Concurrent.STM (TVar)
 import           Language.Fixpoint.Types
 import qualified Data.Text                as T
 import qualified Data.Text.Lazy.Builder   as LT
@@ -90,6 +92,8 @@ data Context = Ctx
   , ctxLog     :: !(Maybe Handle)
   , ctxVerbose :: !Bool
   , ctxSymEnv  :: !SymEnv
+  , ctxAsync   :: Async ()
+  , ctxTVar    :: TVar LT.Builder
   }
 
 --------------------------------------------------------------------------------
