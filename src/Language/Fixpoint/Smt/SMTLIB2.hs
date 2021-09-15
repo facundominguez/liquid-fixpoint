@@ -44,7 +44,6 @@ module Language.Fixpoint.Smt.SMTLIB2 (
     -- * Creating and killing SMTLIB2 Process
     , Context (..)
     , makeContext
-    , makeContextNoLog
     , makeContextWithSEnv
     , cleanupContext
 
@@ -225,13 +224,6 @@ makeContextWithSEnv cfg f env declare = do
   let ctx' = ctx {ctxSymEnv = env}
   declare ctx'
   return ctx'
-
-makeContextNoLog :: Config -> IO Context
-makeContextNoLog cfg
-  = do me  <- makeProcess cfg
-       pre <- smtPreamble cfg (solver cfg) me
-       mapM_ (smtWrite me) pre
-       return me
 
 makeProcess :: Config -> IO Context
 makeProcess cfg

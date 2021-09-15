@@ -22,8 +22,6 @@ module Language.Fixpoint.Smt.Interface (
 
     -- * Creating and killing SMTLIB2 Process
     , Context (..)
-    , makeContext
-    , makeContextNoLog
     , makeContextWithSEnv
     , cleanupContext
 
@@ -47,31 +45,20 @@ module Language.Fixpoint.Smt.Interface (
     , declare
 
     -- * Check Validity
-    , checkValid
-    , checkValid'
     , checkValidWithContext
-    , checkValids
 
     ) where
 
-import           Language.Fixpoint.Types.Config ( SMTSolver (..)
-                                                , Config
-                                                , solver
-                                                , smtTimeout
-                                                , gradual)
 import qualified Language.Fixpoint.Misc          as Misc
 import           Language.Fixpoint.Types.Errors
-import           Language.Fixpoint.Utils.Files
 import           Language.Fixpoint.Types         hiding (allowHO)
 import qualified Language.Fixpoint.Types         as F
 import           Language.Fixpoint.Smt.SMTLIB2
 import           Language.Fixpoint.Smt.Types
 import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Fixpoint.Smt.Serialize ()
-import           Control.Applicative      ((<|>))
 import           Control.Monad
 import           Control.Exception
-import           Data.Char
 import qualified Data.HashMap.Strict      as M
 import           Data.Maybe              (fromMaybe)
 #if !MIN_VERSION_base(4,14,0)
@@ -79,48 +66,13 @@ import           Data.Semigroup          (Semigroup (..))
 #endif
 
 import qualified Data.Text                as T
--- import           Data.Text.Format
-import qualified Data.Text.IO             as TIO
-import qualified Data.Text.Lazy           as LT
-import qualified Data.Text.Lazy.IO        as LTIO
-import           System.Directory
-import           System.Console.CmdArgs.Verbosity
-import           System.Exit              hiding (die)
-import           System.FilePath
-import           System.IO
-import           System.Process
-import qualified Data.Attoparsec.Text     as A
--- import qualified Data.HashMap.Strict      as M
-import           Text.PrettyPrint.HughesPJ (text)
 import           Language.Fixpoint.SortCheck
--- import qualified Language.Fixpoint.Types as F
--- import           Language.Fixpoint.Types.PrettyPrint (tracepp)
 
-{-
-runFile f
-  = readFile f >>= runString
-
-runString str
-  = runCommands $ rr str
-
-runCommands cmds
-  = do me   <- makeContext Z3
-       mapM_ (T.putStrLn . smt2) cmds
-       zs   <- mapM (command me) cmds
-       return zs
--}
 
 checkValidWithContext :: Context -> [(Symbol, Sort)] -> Expr -> Expr -> IO Bool
 checkValidWithContext me xts p q =
   smtBracket me "checkValidWithContext" $
     checkValid' me xts p q
-
--- | type ClosedPred E = {v:Pred | subset (vars v) (keys E) }
--- checkValid :: e:Env -> ClosedPred e -> ClosedPred e -> IO Bool
-checkValid :: Config -> FilePath -> [(Symbol, Sort)] -> Expr -> Expr -> IO Bool
-checkValid cfg f xts p q = do
-  me <- makeContext cfg f
-  checkValid' me xts p q
 
 checkValid' :: Context -> [(Symbol, Sort)] -> Expr -> Expr -> IO Bool
 checkValid' me xts p q = do
@@ -128,17 +80,6 @@ checkValid' me xts p q = do
   smtAssert me $ pAnd [p, PNot q]
   smtCheckUnsat me
 
--- | If you already HAVE a context, where all the variables have declared types
---   (e.g. if you want to make MANY repeated Queries)
-
--- checkValid :: e:Env -> [ClosedPred e] -> IO [Bool]
-checkValids :: Config -> FilePath -> [(Symbol, Sort)] -> [Expr] -> IO [Bool]
-checkValids cfg f xts ps
-  = do me <- makeContext cfg f
-       smtDecls me xts
-       forM ps $ \p ->
-          smtBracket me "checkValids" $
-            smtAssert me (PNot p) >> smtCheckUnsat me
 
 -----------------------------------------------------------------------------
 -- | SMT Commands -----------------------------------------------------------
@@ -232,18 +173,6 @@ smtBracket me _msg a   = do
 
 interact' :: Context -> Command -> IO ()
 interact' me cmd  = void $ command me cmd
-
-
-makeTimeout :: Config -> [LT.Text]
-makeTimeout cfg
-  | Just i <- smtTimeout cfg = [ LT.pack ("\n(set-option :timeout " ++ (show i) ++ ")\n")]
-  | otherwise                = [""]
-
-
-makeMbqi :: Config -> [LT.Text]
-makeMbqi cfg
-  | gradual cfg = [""]
-  | otherwise   = ["\n(set-option :smt.mbqi false)"]
 
 
 --------------------------------------------------------------------------------
