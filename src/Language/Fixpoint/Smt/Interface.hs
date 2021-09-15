@@ -27,10 +27,6 @@ module Language.Fixpoint.Smt.Interface (
     , makeContextWithSEnv
     , cleanupContext
 
-    -- * Execute Queries
-    , command
-    , smtWrite
-
     -- * Query API
     , smtDecl
     , smtDecls

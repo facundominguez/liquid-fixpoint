@@ -18,7 +18,6 @@ module Language.Fixpoint.Solver.Monad
        , filterValid
        , filterValidGradual
        , checkSat
-       , smtEnablembqi
 
          -- * Debug
        , Stats
@@ -37,6 +36,7 @@ import qualified Language.Fixpoint.Types   as F
 -- import           Language.Fixpoint.SortCheck
 import qualified Language.Fixpoint.Types.Solutions as F
 -- import qualified Language.Fixpoint.Types.Errors  as E
+import           Language.Fixpoint.Smt.SMTLIB2 (smtExit)
 import           Language.Fixpoint.Smt.Serialize ()
 import           Language.Fixpoint.Types.PrettyPrint ()
 import           Language.Fixpoint.Smt.Interface
@@ -76,7 +76,7 @@ runSolverM :: Config -> SolverInfo b c -> SolveM a -> IO a
 runSolverM cfg sI act =
   bracket acquire release $ \ctx -> do
     res <- runStateT act' (s0 ctx)
-    smtWrite ctx "(exit)"
+    smtExit ctx
     return (fst res)
   where
     s0 ctx   = SS ctx be (stats0 fi)
@@ -213,11 +213,6 @@ filterValidOne_ p qs me = do
       smtAssert me (F.PNot q)
       valid <- smtCheckUnsat me
       return $ ((q, x), valid)
-
-smtEnablembqi :: SolveM ()
-smtEnablembqi
-  = withContext $ \me ->
-      smtWrite me "(set-option :smt.mbqi true)"
 
 --------------------------------------------------------------------------------
 checkSat :: F.Expr -> SolveM  Bool

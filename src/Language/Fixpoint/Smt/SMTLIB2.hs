@@ -51,8 +51,8 @@ module Language.Fixpoint.Smt.SMTLIB2 (
     -- * Execute Queries
     , command
     , asyncCommand
-    , smtWrite
     , readCheckUnsat
+    , smtExit
 
     ) where
 
@@ -122,6 +122,9 @@ asyncCommand me cmd = do
     asyncPutStrLn :: TVar Builder.Builder -> LT.Text -> IO ()
     asyncPutStrLn tv t = atomically $
       modifyTVar tv (`mappend` (Builder.fromLazyText t `mappend` Builder.fromString "\n"))
+
+smtExit :: Context -> IO ()
+smtExit ctx = smtWrite ctx "(exit)"
 
 smtWrite :: Context -> Raw -> IO ()
 smtWrite me !s = smtWriteRaw me s
