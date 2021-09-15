@@ -16,6 +16,7 @@ module Language.Fixpoint.Smt.Types (
 
     -- * Responses
     , Response (..)
+    , respSat
 
     -- * Typeclass for SMTLIB2 conversion
     , SMTLIB2 (..)
@@ -83,6 +84,12 @@ data Response     = Ok
                   | Values [(Symbol, T.Text)]
                   | Error !T.Text
                   deriving (Eq, Show)
+
+respSat :: Response -> Bool
+respSat Unsat   = True
+respSat Sat     = False
+respSat Unknown = False
+respSat r       = die $ err dummySpan $ text ("crash: SMTLIB2 respSat = " ++ show r)
 
 -- | Information about the external SMT process
 data Context = Ctx

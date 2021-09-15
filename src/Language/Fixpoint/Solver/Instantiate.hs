@@ -797,7 +797,7 @@ assertSelectors γ e = do
 
 withCtx :: Config -> FilePath -> SymEnv -> (SMT.Context -> IO a) -> IO a
 withCtx cfg file env k = do
-  ctx <- SMT.makeContextWithSEnv cfg file env
+  ctx <- SMT.makeContextWithSEnv cfg file env SMT.declare
   _   <- SMT.smtPush ctx
   res <- k ctx
   _   <- SMT.cleanupContext ctx
