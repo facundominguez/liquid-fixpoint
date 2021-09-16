@@ -40,6 +40,7 @@ import           Language.Fixpoint.Smt.SMTLIB2 (smtExit)
 import           Language.Fixpoint.Smt.Serialize ()
 import           Language.Fixpoint.Types.PrettyPrint ()
 import           Language.Fixpoint.Smt.Interface
+import           Language.Fixpoint.Smt.SMTLIB2 (Context, withContextWithSEnv)
 -- import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Fixpoint.Solver.Sanitize
 import           Language.Fixpoint.Solver.Stats
@@ -51,7 +52,6 @@ import           Data.List            (partition)
 import           Control.Monad.State.Strict
 import qualified Data.HashMap.Strict as M
 import           Data.Maybe (catMaybes)
-import           Control.Exception.Base (bracket)
 
 --------------------------------------------------------------------------------
 -- | Solver Monadic API --------------------------------------------------------
@@ -74,15 +74,13 @@ stats0 fi = Stats nCs 0 0 0 0
 runSolverM :: Config -> SolverInfo b c -> SolveM a -> IO a
 --------------------------------------------------------------------------------
 runSolverM cfg sI act =
-  bracket acquire release $ \ctx -> do
+  withContextWithSEnv cfg file initEnv declare $ \ctx -> do
     res <- runStateT act' (s0 ctx)
     smtExit ctx
     return (fst res)
   where
     s0 ctx   = SS ctx be (stats0 fi)
     act'     = assumesAxioms (F.asserts fi) >> act
-    release  = cleanupContext
-    acquire  = makeContextWithSEnv cfg file initEnv declare
     initEnv  = symbolEnv   cfg fi
     be       = F.bs fi
     file     = C.srcFile cfg

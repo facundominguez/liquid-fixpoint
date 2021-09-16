@@ -20,11 +20,6 @@ module Language.Fixpoint.Smt.Interface (
     -- * Typeclass for SMTLIB2 conversion
     , SMTLIB2 (..)
 
-    -- * Creating and killing SMTLIB2 Process
-    , Context (..)
-    , makeContextWithSEnv
-    , cleanupContext
-
     -- * Query API
     , smtDecl
     , smtDecls

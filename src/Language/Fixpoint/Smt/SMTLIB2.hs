@@ -43,8 +43,8 @@ module Language.Fixpoint.Smt.SMTLIB2 (
 
     -- * Creating and killing SMTLIB2 Process
     , Context (..)
-    , makeContext
-    , makeContextWithSEnv
+    , withContext
+    , withContextWithSEnv
     , cleanupContext
 
     -- * Execute Queries
@@ -218,12 +218,20 @@ makeContext cfg f
     where
        smtFile = extFileName Smt2 f
 
+withContext :: Config -> FilePath -> (Context -> IO a) -> IO a
+withContext cfg f = bracket (makeContext cfg f) cleanupContext
+
 makeContextWithSEnv :: Config -> FilePath -> SymEnv -> (Context -> IO ()) -> IO Context
 makeContextWithSEnv cfg f env declare = do
   ctx     <- makeContext cfg f
   let ctx' = ctx {ctxSymEnv = env}
   declare ctx'
   return ctx'
+
+withContextWithSEnv
+  :: Config -> FilePath -> SymEnv -> (Context -> IO ()) -> (Context -> IO a) -> IO a
+withContextWithSEnv cfg f env declare =
+  bracket (makeContextWithSEnv cfg f env declare) cleanupContext
 
 makeProcess :: Config -> IO Context
 makeProcess cfg

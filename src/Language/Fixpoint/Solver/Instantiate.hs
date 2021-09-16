@@ -25,6 +25,7 @@ import           Language.Fixpoint.Types.Config  as FC
 import qualified Language.Fixpoint.Types.Visitor as Vis
 import qualified Language.Fixpoint.Misc          as Misc -- (mapFst)
 import qualified Language.Fixpoint.Smt.Interface as SMT
+import qualified Language.Fixpoint.Smt.SMTLIB2 as SMT (Context(..), withContextWithSEnv)
 import           Language.Fixpoint.Defunctionalize
 import qualified Language.Fixpoint.Utils.Trie    as T 
 import           Language.Fixpoint.Utils.Progress -- as T 
@@ -796,12 +797,10 @@ assertSelectors γ e = do
 --------------------------------------------------------------------------------
 
 withCtx :: Config -> FilePath -> SymEnv -> (SMT.Context -> IO a) -> IO a
-withCtx cfg file env k = do
-  ctx <- SMT.makeContextWithSEnv cfg file env SMT.declare
-  _   <- SMT.smtPush ctx
-  res <- k ctx
-  _   <- SMT.cleanupContext ctx
-  return res
+withCtx cfg file env k =
+  SMT.withContextWithSEnv cfg file env SMT.declare $ \ctx -> do
+    _   <- SMT.smtPush ctx
+    k ctx
 
 (~>) :: (Expr, String) -> Expr -> EvalST Expr
 (e, _str) ~> e' = do
