@@ -42,7 +42,8 @@ module Language.Fixpoint.Smt.SMTLIB2 (
       SMTLIB2 (..)
 
     -- * Creating and killing SMTLIB2 Process
-    , Context (..)
+    , Context
+    , SolveEnv(..)
     , withContext
     , withContextWithSEnv
     , cleanupContext
@@ -105,7 +106,7 @@ command              :: Context -> Command -> IO Response
 --------------------------------------------------------------------------------
 command me !cmd       = say cmd >> hear cmd
   where
-    env               = ctxSymEnv me
+    env               = solveSymEnv me
     say               = smtWrite me . Builder.toLazyText . runSmt2 env
     hear CheckSat     = smtRead me
     hear (GetValue _) = smtRead me
@@ -113,10 +114,10 @@ command me !cmd       = say cmd >> hear cmd
 
 asyncCommand :: Context -> Command -> IO ()
 asyncCommand me cmd = do
-  let env = ctxSymEnv me
+  let env = solveSymEnv me
       cmdText = Builder.toLazyText $ runSmt2 env cmd
-  asyncPutStrLn (ctxTVar me) cmdText
-  maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog me)
+  asyncPutStrLn (ctxTVar $ solveSMTContext me) cmdText
+  maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog $ solveSMTContext me)
   where
     asyncPutStrLn :: TVar Builder.Builder -> LT.Text -> IO ()
     asyncPutStrLn tv t = atomically $
@@ -130,14 +131,14 @@ smtWrite me !s = smtWriteRaw me s
 
 smtRead :: Context -> IO Response
 smtRead me = {- SCC "smtRead" #-} do
-  when (ctxVerbose me) $ LTIO.putStrLn "SMT READ"
+  when (solveVerbose me) $ LTIO.putStrLn "SMT READ"
   ln  <- smtReadRaw me
   res <- A.parseWith (smtReadRaw me) responseP ln
   case A.eitherResult res of
     Left e  -> Misc.errorstar $ "SMTREAD:" ++ e
     Right r -> do
-      maybe (return ()) (\h -> LTIO.hPutStrLn h $ blt ("; SMT Says: " <> (bShow r))) (ctxLog me)
-      when (ctxVerbose me) $ LTIO.putStrLn $ blt ("SMT Says: " <> bShow r)
+      maybe (return ()) (\h -> LTIO.hPutStrLn h $ blt ("; SMT Says: " <> (bShow r))) (ctxLog $ solveSMTContext me)
+      when (solveVerbose me) $ LTIO.putStrLn $ blt ("SMT Says: " <> bShow r)
       return r
 
 readCheckUnsat :: Context -> IO Bool
@@ -185,14 +186,11 @@ negativeP
 
 smtWriteRaw      :: Context -> Raw -> IO ()
 smtWriteRaw me !s = {- SCC "smtWriteRaw" #-} do
-  -- whenLoud $ do LTIO.appendFile debugFile (s <> "\n")
-  --               LTIO.putStrLn ("CMD-RAW:" <> s <> ":CMD-RAW:DONE")
-  hPutStrLnNow (ctxCout me) s
-  maybe (return ()) (`LTIO.hPutStrLn` s) (ctxLog me)
-
+  hPutStrLnNow (ctxCout $ solveSMTContext me) s
+  maybe (return ()) (`LTIO.hPutStrLn` s) (ctxLog $ solveSMTContext me)
 
 smtReadRaw       :: Context -> IO T.Text
-smtReadRaw me    = {- SCC "smtReadRaw" #-} TIO.hGetLine (ctxCin me)
+smtReadRaw me    = {- SCC "smtReadRaw" #-} TIO.hGetLine (ctxCin $ solveSMTContext me)
 {-# SCC smtReadRaw  #-}
 
 hPutStrLnNow     :: Handle -> LT.Text -> IO ()
@@ -212,7 +210,7 @@ makeContext cfg f
        createDirectoryIfMissing True $ takeDirectory smtFile
        hLog <- openFile smtFile WriteMode
        hSetBuffering hLog $ BlockBuffering $ Just $ 1024*1024*64
-       let me' = me { ctxLog = Just hLog }
+       let me' = me { solveSMTContext = (solveSMTContext me) { ctxLog = Just hLog }}
        mapM_ (smtWrite me') pre
        return me'
     where
@@ -224,7 +222,7 @@ withContext cfg f = bracket (makeContext cfg f) cleanupContext
 makeContextWithSEnv :: Config -> FilePath -> SymEnv -> (Context -> IO ()) -> IO Context
 makeContextWithSEnv cfg f env declare = do
   ctx     <- makeContext cfg f
-  let ctx' = ctx {ctxSymEnv = env}
+  let ctx' = ctx { solveSymEnv = env }
   declare ctx'
   return ctx'
 
@@ -250,20 +248,23 @@ makeProcess cfg
            return t
          LTIO.hPutStr hOut t
          hFlush hOut
-       return Ctx { ctxPid     = pid
-                  , ctxCin     = hIn
-                  , ctxCout    = hOut
-                  , ctxLog     = Nothing
-                  , ctxVerbose = loud
-                  , ctxSymEnv  = mempty
-                  , ctxAsync   = writerAsync
-                  , ctxTVar    = queueTVar
-                  }
+       return SolveEnv
+         { solveVerbose = loud
+         , solveSymEnv  = mempty
+         , solveSMTContext = SMTContext
+             { ctxPid     = pid
+             , ctxCin     = hIn
+             , ctxCout    = hOut
+             , ctxLog     = Nothing
+             , ctxAsync   = writerAsync
+             , ctxTVar    = queueTVar
+             }
+         }
 
 --------------------------------------------------------------------------
 cleanupContext :: Context -> IO ExitCode
 --------------------------------------------------------------------------
-cleanupContext (Ctx {..}) = do
+cleanupContext SolveEnv { solveSMTContext = SMTContext {..} } = do
   cancel ctxAsync
   hCloseMe "ctxCin"  ctxCin
   hCloseMe "ctxCout" ctxCout

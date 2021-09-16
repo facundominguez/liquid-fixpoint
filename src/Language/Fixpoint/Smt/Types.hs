@@ -23,7 +23,9 @@ module Language.Fixpoint.Smt.Types (
     , runSmt2
 
     -- * SMTLIB2 Process Context
-    , Context (..)
+    , Context
+    , SMTContext (..)
+    , SolveEnv (..)
 
     ) where
 
@@ -92,13 +94,19 @@ respSat Unknown = False
 respSat r       = die $ err dummySpan $ text ("crash: SMTLIB2 respSat = " ++ show r)
 
 -- | Information about the external SMT process
-data Context = Ctx
-  { ctxPid     :: !ProcessHandle
-  , ctxCin     :: !Handle
-  , ctxCout    :: !Handle
-  , ctxLog     :: !(Maybe Handle)
-  , ctxVerbose :: !Bool
-  , ctxSymEnv  :: !SymEnv
+type Context = SolveEnv SMTContext
+
+data SolveEnv c = SolveEnv
+  { solveVerbose    :: !Bool
+  , solveSymEnv     :: !SymEnv
+  , solveSMTContext :: c
+  }
+
+data SMTContext = SMTContext
+  { ctxPid  :: !ProcessHandle
+  , ctxCin  :: !Handle
+  , ctxCout :: !Handle
+  , ctxLog  :: !(Maybe Handle)
     -- | The handle of the thread writing queries to the SMT solver
   , ctxAsync   :: Async ()
     -- | The next batch of queries to send to the SMT solver

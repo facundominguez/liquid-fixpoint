@@ -27,7 +27,7 @@ import           Language.Fixpoint.Types.Solutions (CMap)
 import qualified Language.Fixpoint.Types.Visitor as Vis
 import qualified Language.Fixpoint.Misc          as Misc 
 import qualified Language.Fixpoint.Smt.Interface as SMT
-import qualified Language.Fixpoint.Smt.SMTLIB2 as SMT (Context(..), withContextWithSEnv)
+import qualified Language.Fixpoint.Smt.SMTLIB2 as SMT (Context, SolveEnv(solveSymEnv), withContextWithSEnv)
 import           Language.Fixpoint.Defunctionalize
 import qualified Language.Fixpoint.Utils.Files   as Files
 import qualified Language.Fixpoint.Utils.Trie    as T 
@@ -104,7 +104,7 @@ instEnv cfg fi cs ctx = InstEnv cfg ctx bEnv aEnv cs γ s0
     bEnv              = bs fi
     aEnv              = ae fi
     γ                 = knowledge cfg ctx fi  
-    s0                = EvalEnv (SMT.ctxSymEnv ctx) mempty (defFuelCount cfg)
+    s0                = EvalEnv (SMT.solveSymEnv ctx) mempty (defFuelCount cfg)
 
 ---------------------------------------------------------------------------------------------- 
 -- | Step 1b: @mkCTrie@ builds the @Trie@ of constraints indexed by their environments
@@ -813,7 +813,7 @@ toSMT msg cfg ctx bs e = defuncAny cfg senv . elaborate "makeKnowledge" (elabEnv
                           $ e 
   where
     elabEnv      = insertsSymEnv senv
-    senv         = SMT.ctxSymEnv ctx
+    senv         = SMT.solveSymEnv ctx
 
 
 --------------------------------------------------------------------------------

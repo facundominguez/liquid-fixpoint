@@ -25,7 +25,7 @@ import           Language.Fixpoint.Types.Config  as FC
 import qualified Language.Fixpoint.Types.Visitor as Vis
 import qualified Language.Fixpoint.Misc          as Misc -- (mapFst)
 import qualified Language.Fixpoint.Smt.Interface as SMT
-import qualified Language.Fixpoint.Smt.SMTLIB2 as SMT (Context(..), withContextWithSEnv)
+import qualified Language.Fixpoint.Smt.SMTLIB2 as SMT (Context, SolveEnv(solveSymEnv), withContextWithSEnv)
 import           Language.Fixpoint.Defunctionalize
 import qualified Language.Fixpoint.Utils.Trie    as T 
 import           Language.Fixpoint.Utils.Progress -- as T 
@@ -89,7 +89,7 @@ instEnv cfg fi cs ctx = InstEnv cfg ctx bEnv aEnv (M.fromList cs) γ s0
     bEnv              = bs fi
     aEnv              = ae fi
     γ                 = knowledge cfg ctx aEnv 
-    s0                = EvalEnv 0 [] aEnv (SMT.ctxSymEnv ctx) cfg 
+    s0                = EvalEnv 0 [] aEnv (SMT.solveSymEnv ctx) cfg
 
 ---------------------------------------------------------------------------------------------- 
 -- | Step 1b: @mkCTrie@ builds the @Trie@ of constraints indexed by their environments 
@@ -333,7 +333,7 @@ evaluate cfg ctx aenv facts es sid = do
   let eqs      = initEqualities ctx aenv facts  
   let γ        = knowledge cfg ctx aenv 
   let cands    = mytracepp  ("evaluate-cands " ++ showpp sid) $ Misc.hashNub (concatMap topApps es)
-  let s0       = EvalEnv 0 [] aenv (SMT.ctxSymEnv ctx) cfg
+  let s0       = EvalEnv 0 [] aenv (SMT.solveSymEnv ctx) cfg
   let ctxEqs   = [ toSMT cfg ctx [] (EEq e1 e2) | (e1, e2)  <- eqs ]
               ++ [ toSMT cfg ctx [] (expr xr)   | xr@(_, r) <- facts, null (Vis.kvars r) ] 
   eqss        <- _evalLoop cfg ctx γ s0 ctxEqs cands 
@@ -686,7 +686,7 @@ initEqualities ctx aenv es = concatMap (makeSimplifications (aenvSimpl aenv)) dc
   where
     dcEqs                  = Misc.hashNub (Mb.catMaybes [getDCEquality senv e1 e2 | EEq e1 e2 <- atoms])
     atoms                  = splitPAnd =<< (expr <$> filter isProof es)
-    senv                   = SMT.ctxSymEnv ctx
+    senv                   = SMT.solveSymEnv ctx
 
 -- AT: Non-obvious needed invariant: askSMT True is always the 
 -- totality-effecting one.
@@ -704,7 +704,7 @@ toSMT :: Config -> SMT.Context -> [(Symbol, Sort)] -> Expr -> Pred
 toSMT cfg ctx bs = defuncAny cfg senv . elaborate "makeKnowledge" (elabEnv bs)
   where
     elabEnv      = insertsSymEnv senv
-    senv         = SMT.ctxSymEnv ctx
+    senv         = SMT.solveSymEnv ctx
 
 makeSimplifications :: [Rewrite] -> (Symbol, [Expr], Expr) -> [(Expr, Expr)]
 makeSimplifications sis (dc, es, e)

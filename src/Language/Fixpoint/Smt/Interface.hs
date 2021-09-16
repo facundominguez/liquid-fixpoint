@@ -94,7 +94,7 @@ smtDecl me x t = interact' me ({- notracepp msg $ -} Declare (symbolSafeText x) 
     out'       = sortSmtSort False env     out
     (ins, out) = deconSort t
     _msg        = "smtDecl: " ++ showpp (x, t, ins, out)
-    env        = seData (ctxSymEnv me)
+    env        = seData (solveSymEnv me)
 
 smtFuncDecl :: Context -> T.Text -> ([SmtSort],  SmtSort) -> IO ()
 smtFuncDecl me x (ts, t) = interact' me (Declare x ts t)
@@ -181,7 +181,7 @@ declare me = do
   forM_ ess    $           smtDistinct me
   forM_ axs    $           smtAssert   me
   where
-    env        = ctxSymEnv me
+    env        = solveSymEnv me
     dss        = dataDeclarations          env
     lts        = F.toListSEnv . F.seLits $ env
     ess        = distinctLiterals  lts
