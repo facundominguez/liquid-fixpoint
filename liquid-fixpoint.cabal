@@ -61,6 +61,7 @@ library
                     Language.Fixpoint.Parse
                     Language.Fixpoint.Smt.Bitvector
                     Language.Fixpoint.Smt.Interface
+                    Language.Fixpoint.Smt.SMTFFI
                     Language.Fixpoint.Smt.SMTLIB2
                     Language.Fixpoint.Smt.Serialize
                     Language.Fixpoint.Smt.Theories
@@ -127,6 +128,8 @@ library
                   , fgl
                   , filepath
                   , hashable
+                  , inline-c
+                  , inline-c-cpp
                   , intern
                   , mtl
                   , parallel
@@ -137,11 +140,13 @@ library
                   , stm
                   , syb
                   , syb
+                  , template-haskell
                   , text
                   , transformers
                   , unordered-containers
                   , aeson
   default-language: Haskell98
+  extra-libraries: smt-switch smt-switch-z3
   ghc-options:      -W -fno-warn-missing-methods -fwarn-missing-signatures
 
   if flag(devel)
