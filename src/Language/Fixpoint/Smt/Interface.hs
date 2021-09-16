@@ -12,7 +12,8 @@
 module Language.Fixpoint.Smt.Interface (
 
     -- * Commands
-      Command  (..)
+      IsSMTContext (..)
+    , Command  (..)
 
     -- * Responses
     , Response (..)
@@ -48,7 +49,6 @@ import qualified Language.Fixpoint.Misc          as Misc
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Types         hiding (allowHO)
 import qualified Language.Fixpoint.Types         as F
-import           Language.Fixpoint.Smt.SMTLIB2
 import           Language.Fixpoint.Smt.Types
 import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Fixpoint.Smt.Serialize ()
@@ -64,12 +64,19 @@ import qualified Data.Text                as T
 import           Language.Fixpoint.SortCheck
 
 
-checkValidWithContext :: Context -> [(Symbol, Sort)] -> Expr -> Expr -> IO Bool
+-- | This class implements the low level interactions with an SMT solver
+class IsSMTContext ctx where
+  command :: SolveEnv ctx -> Command -> IO Response
+  asyncCommand :: SolveEnv ctx -> Command -> IO ()
+  smtRead :: SolveEnv ctx -> IO Response
+
+checkValidWithContext
+  :: IsSMTContext ctx => SolveEnv ctx -> [(Symbol, Sort)] -> Expr -> Expr -> IO Bool
 checkValidWithContext me xts p q =
   smtBracket me "checkValidWithContext" $
     checkValid' me xts p q
 
-checkValid' :: Context -> [(Symbol, Sort)] -> Expr -> Expr -> IO Bool
+checkValid' :: IsSMTContext ctx => SolveEnv ctx -> [(Symbol, Sort)] -> Expr -> Expr -> IO Bool
 checkValid' me xts p q = do
   smtDecls me xts
   smtAssert me $ pAnd [p, PNot q]
@@ -80,14 +87,14 @@ checkValid' me xts p q = do
 -- | SMT Commands -----------------------------------------------------------
 -----------------------------------------------------------------------------
 
-smtPush, smtPop   :: Context -> IO ()
+smtPush, smtPop   :: IsSMTContext ctx => SolveEnv ctx -> IO ()
 smtPush me        = interact' me Push
 smtPop me         = interact' me Pop
 
-smtDecls :: Context -> [(Symbol, Sort)] -> IO ()
+smtDecls :: IsSMTContext ctx => SolveEnv ctx -> [(Symbol, Sort)] -> IO ()
 smtDecls = mapM_ . uncurry . smtDecl
 
-smtDecl :: Context -> Symbol -> Sort -> IO ()
+smtDecl :: IsSMTContext ctx => SolveEnv ctx -> Symbol -> Sort -> IO ()
 smtDecl me x t = interact' me ({- notracepp msg $ -} Declare (symbolSafeText x) ins' out')
   where
     ins'       = sortSmtSort False env <$> ins
@@ -96,10 +103,10 @@ smtDecl me x t = interact' me ({- notracepp msg $ -} Declare (symbolSafeText x) 
     _msg        = "smtDecl: " ++ showpp (x, t, ins, out)
     env        = seData (solveSymEnv me)
 
-smtFuncDecl :: Context -> T.Text -> ([SmtSort],  SmtSort) -> IO ()
+smtFuncDecl :: IsSMTContext ctx => SolveEnv ctx -> T.Text -> ([SmtSort],  SmtSort) -> IO ()
 smtFuncDecl me x (ts, t) = interact' me (Declare x ts t)
 
-smtDataDecl :: Context -> [DataDecl] -> IO ()
+smtDataDecl :: IsSMTContext ctx => SolveEnv ctx -> [DataDecl] -> IO ()
 smtDataDecl me ds = interact' me (DeclData ds)
 
 deconSort :: Sort -> ([Sort], Sort)
@@ -108,16 +115,18 @@ deconSort t = case functionSort t of
                 Nothing            -> ([] , t  )
 
 -- hack now this is used only for checking gradual condition.
-smtCheckSat :: Context -> Expr -> IO Bool
+smtCheckSat :: IsSMTContext ctx => SolveEnv ctx -> Expr -> IO Bool
 smtCheckSat me p
  = smtAssert me p >> (ans <$> command me CheckSat)
  where
    ans Sat = True
    ans _   = False
 
-smtAssert :: Context -> Expr -> IO ()
+smtAssert :: IsSMTContext ctx => SolveEnv ctx -> Expr -> IO ()
 smtAssert me p  = interact' me (Assert Nothing p)
 
+readCheckUnsat :: IsSMTContext ctx => SolveEnv ctx -> IO Bool
+readCheckUnsat me = respSat <$> smtRead me
 
 -----------------------------------------------------------------
 -- Async calls to the smt
@@ -125,53 +134,53 @@ smtAssert me p  = interact' me (Assert Nothing p)
 -- See Note [Async SMT API]
 -----------------------------------------------------------------
 
-smtAssertAsync :: Context -> Expr -> IO ()
+smtAssertAsync :: IsSMTContext ctx => SolveEnv ctx -> Expr -> IO ()
 smtAssertAsync me p  = asyncCommand me $ Assert Nothing p
 
-smtCheckUnsatAsync :: Context -> IO ()
+smtCheckUnsatAsync :: IsSMTContext ctx => SolveEnv ctx -> IO ()
 smtCheckUnsatAsync me = asyncCommand me CheckSat
 
-smtBracketAsyncAt :: SrcSpan -> Context -> String -> IO a -> IO a
+smtBracketAsyncAt :: IsSMTContext ctx => SrcSpan -> SolveEnv ctx -> String -> IO a -> IO a
 smtBracketAsyncAt sp x y z = smtBracketAsync x y z `catch` dieAt sp
 
-smtBracketAsync :: Context -> String -> IO a -> IO a
+smtBracketAsync :: IsSMTContext ctx => SolveEnv ctx -> String -> IO a -> IO a
 smtBracketAsync me _msg a   = do
   smtPushAsync me
   r <- a
   smtPopAsync me
   return r
 
-smtPushAsync, smtPopAsync   :: Context -> IO ()
+smtPushAsync, smtPopAsync :: IsSMTContext ctx => SolveEnv ctx -> IO ()
 smtPushAsync me = asyncCommand me Push
 smtPopAsync me = asyncCommand me Pop
 
 -----------------------------------------------------------------
 
-smtAssertAxiom :: Context -> Triggered Expr -> IO ()
+smtAssertAxiom :: IsSMTContext ctx => SolveEnv ctx -> Triggered Expr -> IO ()
 smtAssertAxiom me p  = interact' me (AssertAx p)
 
-smtDistinct :: Context -> [Expr] -> IO ()
+smtDistinct :: IsSMTContext ctx => SolveEnv ctx -> [Expr] -> IO ()
 smtDistinct me az = interact' me (Distinct az)
 
-smtCheckUnsat :: Context -> IO Bool
+smtCheckUnsat :: IsSMTContext ctx => SolveEnv ctx -> IO Bool
 smtCheckUnsat me  = respSat <$> command me CheckSat
 
-smtBracketAt :: SrcSpan -> Context -> String -> IO a -> IO a
+smtBracketAt :: IsSMTContext ctx => SrcSpan -> SolveEnv ctx -> String -> IO a -> IO a
 smtBracketAt sp x y z = smtBracket x y z `catch` dieAt sp
 
-smtBracket :: Context -> String -> IO a -> IO a
+smtBracket :: IsSMTContext ctx => SolveEnv ctx -> String -> IO a -> IO a
 smtBracket me _msg a   = do
   smtPush me
   r <- a
   smtPop me
   return r
 
-interact' :: Context -> Command -> IO ()
+interact' :: IsSMTContext ctx => SolveEnv ctx -> Command -> IO ()
 interact' me cmd  = void $ command me cmd
 
 
 --------------------------------------------------------------------------------
-declare :: Context -> IO () -- SolveM ()
+declare :: IsSMTContext ctx => SolveEnv ctx -> IO () -- SolveM ()
 --------------------------------------------------------------------------------
 declare me = do
   forM_ dss    $           smtDataDecl me

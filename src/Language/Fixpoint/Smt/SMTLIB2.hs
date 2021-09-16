@@ -51,7 +51,7 @@ module Language.Fixpoint.Smt.SMTLIB2 (
     -- * Execute Queries
     , command
     , asyncCommand
-    , readCheckUnsat
+    , smtRead
     , smtExit
 
     ) where
@@ -69,6 +69,7 @@ import qualified Language.Fixpoint.Misc          as Misc
 import           Language.Fixpoint.Types.Errors
 import           Language.Fixpoint.Utils.Files
 import           Language.Fixpoint.Types         hiding (allowHO)
+import           Language.Fixpoint.Smt.Interface (IsSMTContext(..))
 import           Language.Fixpoint.Smt.Types
 import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Fixpoint.Smt.Serialize ()
@@ -114,49 +115,42 @@ data SMTContext = SMTContext
 -- | SMT IO --------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
-{-# SCC command #-}
-command              :: Context -> Command -> IO Response
---------------------------------------------------------------------------------
-command me !cmd       = say cmd >> hear cmd
-  where
-    env               = solveSymEnv me
-    say               = smtWrite me . Builder.toLazyText . runSmt2 env
-    hear CheckSat     = smtRead me
-    hear (GetValue _) = smtRead me
-    hear _            = return Ok
+instance IsSMTContext SMTContext where
+  {-# SCC command #-}
+  command me !cmd       = say cmd >> hear cmd
+    where
+      env               = solveSymEnv me
+      say               = smtWrite me . Builder.toLazyText . runSmt2 env
+      hear CheckSat     = smtRead me
+      hear (GetValue _) = smtRead me
+      hear _            = return Ok
 
-asyncCommand :: Context -> Command -> IO ()
-asyncCommand me cmd = do
-  let env = solveSymEnv me
-      cmdText = Builder.toLazyText $ runSmt2 env cmd
-  asyncPutStrLn (ctxTVar $ solveSMTContext me) cmdText
-  maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog $ solveSMTContext me)
-  where
-    asyncPutStrLn :: TVar Builder.Builder -> LT.Text -> IO ()
-    asyncPutStrLn tv t = atomically $
-      modifyTVar tv (`mappend` (Builder.fromLazyText t `mappend` Builder.fromString "\n"))
+  asyncCommand me cmd = do
+    let env = solveSymEnv me
+        cmdText = Builder.toLazyText $ runSmt2 env cmd
+    asyncPutStrLn (ctxTVar $ solveSMTContext me) cmdText
+    maybe (return ()) (`LTIO.hPutStrLn` cmdText) (ctxLog $ solveSMTContext me)
+    where
+      asyncPutStrLn :: TVar Builder.Builder -> LT.Text -> IO ()
+      asyncPutStrLn tv t = atomically $
+        modifyTVar tv (`mappend` (Builder.fromLazyText t `mappend` Builder.fromString "\n"))
+
+  smtRead me = {- SCC "smtRead" #-} do
+    when (solveVerbose me) $ LTIO.putStrLn "SMT READ"
+    ln  <- smtReadRaw me
+    res <- A.parseWith (smtReadRaw me) responseP ln
+    case A.eitherResult res of
+      Left e  -> Misc.errorstar $ "SMTREAD:" ++ e
+      Right r -> do
+        maybe (return ()) (\h -> LTIO.hPutStrLn h $ blt ("; SMT Says: " <> (bShow r))) (ctxLog $ solveSMTContext me)
+        when (solveVerbose me) $ LTIO.putStrLn $ blt ("SMT Says: " <> bShow r)
+        return r
 
 smtExit :: Context -> IO ()
 smtExit ctx = smtWrite ctx "(exit)"
 
 smtWrite :: Context -> Raw -> IO ()
 smtWrite me !s = smtWriteRaw me s
-
-smtRead :: Context -> IO Response
-smtRead me = {- SCC "smtRead" #-} do
-  when (solveVerbose me) $ LTIO.putStrLn "SMT READ"
-  ln  <- smtReadRaw me
-  res <- A.parseWith (smtReadRaw me) responseP ln
-  case A.eitherResult res of
-    Left e  -> Misc.errorstar $ "SMTREAD:" ++ e
-    Right r -> do
-      maybe (return ()) (\h -> LTIO.hPutStrLn h $ blt ("; SMT Says: " <> (bShow r))) (ctxLog $ solveSMTContext me)
-      when (solveVerbose me) $ LTIO.putStrLn $ blt ("SMT Says: " <> bShow r)
-      return r
-
-readCheckUnsat :: Context -> IO Bool
-readCheckUnsat me = respSat <$> smtRead me
 
 type SmtParser a = Parser T.Text a
 
