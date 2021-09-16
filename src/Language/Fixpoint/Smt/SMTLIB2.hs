@@ -56,7 +56,7 @@ module Language.Fixpoint.Smt.SMTLIB2 (
 
     ) where
 
-import           Control.Concurrent.Async (async, cancel)
+import           Control.Concurrent.Async (Async, async, cancel)
 import           Control.Concurrent.STM
   (TVar, atomically, modifyTVar, newTVarIO, readTVar, retry, writeTVar)
 import           Language.Fixpoint.Types.Config ( SMTSolver (..)
@@ -95,6 +95,20 @@ import           Data.Attoparsec.Internal.Types (Parser)
 import           Text.PrettyPrint.HughesPJ (text)
 import           Language.Fixpoint.Utils.Builder as Builder
 
+
+-- | Information about the external SMT process
+type Context = SolveEnv SMTContext
+
+data SMTContext = SMTContext
+  { ctxPid  :: !ProcessHandle
+  , ctxCin  :: !Handle
+  , ctxCout :: !Handle
+  , ctxLog  :: !(Maybe Handle)
+    -- | The handle of the thread writing queries to the SMT solver
+  , ctxAsync   :: Async ()
+    -- | The next batch of queries to send to the SMT solver
+  , ctxTVar    :: TVar Builder
+  }
 
 --------------------------------------------------------------------------------
 -- | SMT IO --------------------------------------------------------------------
