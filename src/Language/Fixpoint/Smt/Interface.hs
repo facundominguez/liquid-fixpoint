@@ -184,10 +184,8 @@ checkValids cfg f xts ps
 {-# SCC command #-}
 command              :: Context -> Command -> IO Response
 --------------------------------------------------------------------------------
-command me !cmd       = say cmd >> hear cmd
+command me !cmd       = asyncCommand me cmd >> hear cmd
   where
-    env               = ctxSymEnv me
-    say               = smtWrite me . Builder.toLazyText . runSmt2 env
     hear CheckSat     = smtRead me
     hear (GetValue _) = smtRead me
     hear _            = return Ok
@@ -496,7 +494,7 @@ respSat Unknown = False
 respSat r       = die $ err dummySpan $ text ("crash: SMTLIB2 respSat = " ++ show r)
 
 interact' :: Context -> Command -> IO ()
-interact' me cmd  = void $ command me cmd
+interact' me cmd  = asyncCommand me cmd
 
 
 makeTimeout :: Config -> [LT.Text]
