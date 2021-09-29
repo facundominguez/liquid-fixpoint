@@ -388,14 +388,14 @@ versionGreaterEq _ _ = Misc.errorstar "Interface.versionGreater called with bad 
 -----------------------------------------------------------------------------
 
 smtPush, smtPop   :: Context -> IO ()
-smtPush me        = interact' me Push
-smtPop me         = interact' me Pop
+smtPush me        = asyncCommand me Push
+smtPop me         = asyncCommand me Pop
 
 smtDecls :: Context -> [(Symbol, Sort)] -> IO ()
 smtDecls = mapM_ . uncurry . smtDecl
 
 smtDecl :: Context -> Symbol -> Sort -> IO ()
-smtDecl me x t = interact' me ({- notracepp msg $ -} Declare (symbolSafeText x) ins' out')
+smtDecl me x t = asyncCommand me ({- notracepp msg $ -} Declare (symbolSafeText x) ins' out')
   where
     ins'       = sortSmtSort False env <$> ins
     out'       = sortSmtSort False env     out
@@ -404,10 +404,10 @@ smtDecl me x t = interact' me ({- notracepp msg $ -} Declare (symbolSafeText x) 
     env        = seData (ctxSymEnv me)
 
 smtFuncDecl :: Context -> T.Text -> ([SmtSort],  SmtSort) -> IO ()
-smtFuncDecl me x (ts, t) = interact' me (Declare x ts t)
+smtFuncDecl me x (ts, t) = asyncCommand me (Declare x ts t)
 
 smtDataDecl :: Context -> [DataDecl] -> IO ()
-smtDataDecl me ds = interact' me (DeclData ds)
+smtDataDecl me ds = asyncCommand me (DeclData ds)
 
 deconSort :: Sort -> ([Sort], Sort)
 deconSort t = case functionSort t of
@@ -423,7 +423,7 @@ smtCheckSat me p
    ans _   = False
 
 smtAssert :: Context -> Expr -> IO ()
-smtAssert me p  = interact' me (Assert Nothing p)
+smtAssert me p  = asyncCommand me (Assert Nothing p)
 
 
 -----------------------------------------------------------------
@@ -469,10 +469,10 @@ readCheckUnsat :: Context -> IO Bool
 readCheckUnsat me = respSat <$> smtRead me
 
 smtAssertAxiom :: Context -> Triggered Expr -> IO ()
-smtAssertAxiom me p  = interact' me (AssertAx p)
+smtAssertAxiom me p  = asyncCommand me (AssertAx p)
 
 smtDistinct :: Context -> [Expr] -> IO ()
-smtDistinct me az = interact' me (Distinct az)
+smtDistinct me az = asyncCommand me (Distinct az)
 
 smtCheckUnsat :: Context -> IO Bool
 smtCheckUnsat me  = respSat <$> command me CheckSat
@@ -492,10 +492,6 @@ respSat Unsat   = True
 respSat Sat     = False
 respSat Unknown = False
 respSat r       = die $ err dummySpan $ text ("crash: SMTLIB2 respSat = " ++ show r)
-
-interact' :: Context -> Command -> IO ()
-interact' me cmd  = asyncCommand me cmd
-
 
 makeTimeout :: Config -> [LT.Text]
 makeTimeout cfg
