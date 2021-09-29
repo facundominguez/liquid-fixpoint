@@ -27,8 +27,6 @@
 -- together without waiting for the reply to each one, i.e. asynchronously.
 -- We then collect the multiple answers after sending all of the queries.
 --
--- The functions named @smt*Async@ implement this scheme.
---
 -- An asynchronous thread is used to write the queries to prevent the
 -- caller from blocking on IO, should the write buffer be full or should
 -- an 'hFlush' call be necessary.
@@ -67,12 +65,8 @@ module Language.Fixpoint.Smt.Interface (
     , smtBracket, smtBracketAt
     , smtDistinct
     , smtPush, smtPop
-    , smtAssertAsync
     , smtCheckUnsatAsync
     , readCheckUnsat
-    , smtBracketAsyncAt
-    , smtPushAsync
-    , smtPopAsync
 
     -- * Check Validity
     , checkValid
@@ -443,25 +437,8 @@ asyncCommand me cmd = do
     asyncPutStrLn tv t = atomically $
       modifyTVar tv (`mappend` (Builder.fromLazyText t `mappend` Builder.fromString "\n"))
 
-smtAssertAsync :: Context -> Expr -> IO ()
-smtAssertAsync me p  = asyncCommand me $ Assert Nothing p
-
 smtCheckUnsatAsync :: Context -> IO ()
 smtCheckUnsatAsync me = asyncCommand me CheckSat
-
-smtBracketAsyncAt :: SrcSpan -> Context -> String -> IO a -> IO a
-smtBracketAsyncAt sp x y z = smtBracketAsync x y z `catch` dieAt sp
-
-smtBracketAsync :: Context -> String -> IO a -> IO a
-smtBracketAsync me _msg a   = do
-  smtPushAsync me
-  r <- a
-  smtPopAsync me
-  return r
-
-smtPushAsync, smtPopAsync   :: Context -> IO ()
-smtPushAsync me = asyncCommand me Push
-smtPopAsync me = asyncCommand me Pop
 
 -----------------------------------------------------------------
 

@@ -169,10 +169,10 @@ filterValid sp p qs = do
 
 filterValid_ :: F.SrcSpan -> F.Expr -> F.Cand a -> Context -> IO [a]
 filterValid_ sp p qs me = catMaybes <$> do
-  smtAssertAsync me p
+  smtAssert me p
   forM_ qs $ \(q, _x) ->
-    smtBracketAsyncAt sp me "filterValidRHS" $ do
-      smtAssertAsync me (F.PNot q)
+    smtBracketAt sp me "filterValidRHS" $ do
+      smtAssert me (F.PNot q)
       smtCheckUnsatAsync me
   forM qs $ \(_, x) -> do
     valid <- readCheckUnsat me
