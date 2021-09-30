@@ -22,6 +22,7 @@ import           Language.Fixpoint.Solver.Sanitize
 -- | `solverInfo` constructs a `SolverInfo` comprising the Solution and various
 --   indices needed by the worklist-based refinement loop
 --------------------------------------------------------------------------------
+{-# SCC solverInfo #-}
 solverInfo :: Config -> SInfo a -> SolverInfo a b
 --------------------------------------------------------------------------------
 solverInfo cfg sI = SI sHyp sI' cD cKs
@@ -38,6 +39,7 @@ solverInfo cfg sI = SI sHyp sI' cD cKs
 
 
 --------------------------------------------------------------------------------
+{-# SCC kvScopes #-}
 kvScopes :: SInfo a -> [CEdge] -> M.HashMap KVar IBindEnv
 kvScopes sI es = is2env <$> kiM
   where
@@ -47,6 +49,7 @@ kvScopes sI es = is2env <$> kiM
 
 --------------------------------------------------------------------------------
 
+{-# SCC cutSInfo #-}
 cutSInfo :: SInfo a -> KIndex -> S.HashSet KVar -> SInfo a
 cutSInfo si kI cKs = si { ws = ws', cm = cm' }
   where
