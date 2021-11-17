@@ -41,6 +41,10 @@ jobs:
           command : |
             stack --no-terminal build -j2 liquid-fixpoint --flag liquid-fixpoint:devel --test --no-run-tests
       - run:
+          name: Test tests/horn/pos/ple0.smt2
+          command : |
+            stack --no-terminal exec fixpoint -- tests/horn/pos/ple0.smt2
+      - run:
           name: Test
           command: |
             mkdir -p /tmp/junit
