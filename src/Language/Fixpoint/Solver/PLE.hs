@@ -248,7 +248,7 @@ evalCandsLoop cfg ictx0 ctx γ = go ictx0 0
                                  let ictx''   = ictx' { icSolved = icSolved ictx <> oks
                                                       , icEquals = icEquals ictx <> us'
                                                       , icAssms  = S.filter (not . isTautoPred) eqsSMT }
-                                 let newcands = mconcat (makeCandidates γ ictx'' <$> S.toList (cands <> (snd `S.map` unknownEqs)))
+                                 let newcands = filterCandidates γ ictx'' $ S.toList (cands <> (snd `S.map` unknownEqs))
                                  go (ictx'' { icCands = S.fromList newcands}) (i + 1)
 
     testForInconsistentEnvironment =
@@ -361,7 +361,7 @@ updCtx InstEnv {..} ctx delta cidMb
                     }
   where
     initEqs   = S.fromList $ concat [rewrite e (knSims ieKnowl) | e  <- cands]
-    cands     = concatMap (makeCandidates ieKnowl ctx) (rhs:es)
+    cands     = filterCandidates ieKnowl ctx (rhs:es)
     sims      = S.filter (isSimplification (knDCs ieKnowl)) (initEqs <> icEquals ctx)
     econsts   = M.fromList $ findConstants ieKnowl es
     ctxEqs    = toSMT "updCtx" ieCfg ieSMT [] <$> L.nub (concat
@@ -389,13 +389,14 @@ findConstants γ es = [(EVar x, c) | (x,c) <- go [] (concatMap splitPAnd es)]
                            , isConstant (knDCs γ) c
                            , EVar x /= c ]
 
-makeCandidates :: Knowledge -> ICtx -> Expr -> [Expr]
-makeCandidates γ ctx expr
-  = mytracepp ("\n" ++ show (length cands) ++ " New Candidates") cands
+filterCandidates :: Knowledge -> ICtx -> [Expr] -> [Expr]
+filterCandidates γ ctx exprs
+  = let cands = filter filterCand exprs
+     in mytracepp ("\n" ++ show (length cands) ++ " New Candidates") cands
   where
-    cands =
-      filter (\e -> isRedex γ e && not (e `S.member` icSolved ctx)) (notGuardedApps expr) ++
-      filter (\e -> hasConstructors γ e && not (e `S.member` icSolved ctx)) (largestApps expr)
+    filterCand expr =
+      any (\e -> isRedex γ e && not (e `S.member` icSolved ctx)) (notGuardedApps expr) ||
+      any (\e -> hasConstructors γ e && not (e `S.member` icSolved ctx)) (largestApps expr)
 
     -- Constructor occurrences need to be considered as candidadates since
     -- they identify relevant measure equations. The function 'rewrite'
