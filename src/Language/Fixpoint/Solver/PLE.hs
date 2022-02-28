@@ -171,9 +171,9 @@ loopT
 loopT env ctx delta i res t = case t of
   T.Node []  -> return res
   T.Node [b] -> loopB env ctx delta i res b
-  T.Node bs  -> withAssms env ctx delta Nothing $ \ctx' -> do
-                  (ctx'', res') <- ple1 env ctx' i res
-                  foldM (loopB env ctx'' [] i) res' bs
+  T.Node bs  -> withAssms env ctx delta Nothing $ \env' ctx' -> do
+                  (ctx'', res') <- ple1 env' ctx' i res
+                  foldM (loopB env' ctx'' [] i) res' bs
 
 loopB
   :: InstEnv a
@@ -186,9 +186,9 @@ loopB
   -> IO InstRes
 loopB env ctx delta iMb res b = case b of
   T.Bind i t -> loopT env ctx (i:delta) (Just i) res t
-  T.Val cid  -> withAssms env ctx delta (Just cid) $ \ctx' -> do
+  T.Val cid  -> withAssms env ctx delta (Just cid) $ \env' ctx' -> do
                   progressTick
-                  snd <$> ple1 env ctx' iMb res
+                  snd <$> ple1 env' ctx' iMb res
 
 -- | Adds to @ctx@ candidate expressions to unfold from the bindings in @delta@
 -- and the rhs of @cidMb@.
@@ -201,19 +201,19 @@ loopB env ctx delta iMb res b = case b of
 -- Pushes assumptions from the modified context to the SMT solver, runs @act@,
 -- and then pops the assumptions.
 --
-withAssms :: InstEnv a -> ICtx -> Diff -> Maybe SubcId -> (ICtx -> IO b) -> IO b
+withAssms :: InstEnv a -> ICtx -> Diff -> Maybe SubcId -> (InstEnv a -> ICtx -> IO b) -> IO b
 withAssms env@(InstEnv {..}) ctx delta cidMb act = do
   let ctx'  = updCtx env ctx delta cidMb
   let assms = icAssms ctx'
   SMT.smtBracket ieSMT  "PLE.evaluate" $ do
     forM_ assms (SMT.smtAssert ieSMT)
-    act ctx' { icAssms = mempty }
+    let env' = ieEvEnv { evAccum = M.fromList (S.toList (icEquals ctx')) <> evAccum ieEvEnv }
+    act env { ieEvEnv = env' } ctx' { icAssms = mempty }
 
 -- | @ple1@ performs the PLE at a single "node" in the Trie
 ple1 :: InstEnv a -> ICtx -> Maybe BindId -> InstRes -> IO (ICtx, InstRes)
 ple1 (InstEnv {..}) ctx i res = do
-  let env = ieEvEnv { evAccum = M.fromList (S.toList (icEquals ctx)) <> evAccum ieEvEnv }
-  ctx <- evalStateT (evalCandsLoop ieCfg ctx ieSMT ieKnowl) env
+  ctx <- evalStateT (evalCandsLoop ieCfg ctx ieSMT ieKnowl) ieEvEnv
   return (ctx, updCtxRes res i ctx)
 
 evalToSMT :: String -> Config -> SMT.Context -> (Expr, Expr) -> Pred
