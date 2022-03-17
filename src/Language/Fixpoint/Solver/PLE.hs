@@ -385,7 +385,8 @@ updCtx env@InstEnv {..} ctx delta cidMb
                   , [ expr xr   | xr@(_, r) <- bs, null (Vis.kvarsExpr $ reftPred $ sr_reft r) ]
                   ])
     bs        = second unElabSortedReft <$> binds
-    (rhs:es)  = unElab <$> (eRhs : (expr <$> binds))
+    rhs       = unElab eRhs
+    es        = expr <$> bs
     eRhs      = maybe PTrue crhs subMb
     binds     = [ lookupBindEnv i ieBEnv | i <- delta ]
     subMb     = getCstr ieCstrs <$> cidMb
