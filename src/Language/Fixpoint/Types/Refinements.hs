@@ -78,6 +78,7 @@ module Language.Fixpoint.Types.Refinements (
   , dropECst
   , eApps
   , eAppC
+  , eCst
   , exprKVars
   , exprSymbolsSet
   , splitEApp
@@ -447,7 +448,11 @@ splitPAnd (PAnd es) = concatMap splitPAnd es
 splitPAnd e         = [e]
 
 eAppC :: Sort -> Expr -> Expr -> Expr
-eAppC s e1 e2 = ECst (EApp e1 e2) s
+eAppC s e1 e2 = eCst (EApp e1 e2) s
+
+-- | Eliminates redundant casts
+eCst :: Expr -> Sort -> Expr
+eCst e t = ECst (dropECst e) t
 
 --------------------------------------------------------------------------------
 debruijnIndex :: Expr -> Int
