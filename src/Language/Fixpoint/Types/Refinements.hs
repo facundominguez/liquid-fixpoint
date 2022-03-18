@@ -11,6 +11,7 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 -- | This module has the types for representing terms in the refinement logic.
 
@@ -82,6 +83,7 @@ module Language.Fixpoint.Types.Refinements (
   , exprKVars
   , exprSymbolsSet
   , splitEApp
+  , splitEAppThroughECst
   , splitPAnd
   , reftConjuncts
   , sortedReftSymbols
@@ -436,6 +438,12 @@ splitEApp :: Expr -> (Expr, [Expr])
 splitEApp = go []
   where
     go acc (EApp f e) = go (e:acc) f
+    go acc e          = (e, acc)
+
+splitEAppThroughECst :: Expr -> (Expr, [Expr])
+splitEAppThroughECst = go []
+  where
+    go acc (dropECst -> (EApp f e)) = go (e:acc) f
     go acc e          = (e, acc)
 
 dropECst :: Expr -> Expr
