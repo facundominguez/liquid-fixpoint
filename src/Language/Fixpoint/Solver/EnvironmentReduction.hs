@@ -72,6 +72,7 @@ import           Language.Fixpoint.Types.Refinements
   , Subst(..)
   , pattern PTrue
   , pattern PFalse
+  , dropECst
   , expr
   , exprKVars
   , exprSymbolsSet
@@ -684,11 +685,6 @@ inlineInExpr srLookup = mapExprOnExpr inlineExpr
     wrapWithCoercion br to e = case exprSort_maybe e of
       Just from -> if from /= to then ECoerc from to e else e
       Nothing -> if br == Ueq then ECst e to else e
-
-dropECst :: Expr -> Expr
-dropECst = \case
-  ECst e _t -> dropECst e
-  e -> e
 
 -- | Transforms bindings of the form @{v:bool | v && P v}@ into
 -- @{v:Bool | v && P true}@, and bindings of the form @{v:bool | ~v && P v}@
