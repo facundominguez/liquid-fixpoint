@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE PatternGuards             #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -17,11 +19,13 @@ module Language.Fixpoint.Solver.Rewrite
   , RESTOrdering(..)
   ) where
 
-import           Control.Monad.State (guard)
+import           Control.Monad.State (guard, liftIO)
 import           Control.Monad.Trans.Maybe
+import           Data.Hashable (Hashable)
 import qualified Data.HashMap.Strict  as M
 import qualified Data.List            as L
 import qualified Data.Text as TX
+import           GHC.Generics (Generic)
 import           GHC.IO.Handle.Types (Handle)
 import           Text.PrettyPrint (text)
 import           Language.Fixpoint.Types.Config (RESTOrdering(..))
@@ -61,7 +65,7 @@ data OCType =
   | LPO (ConstraintsADT Op)
   | KBO (SMTExpr Bool)
   | Fuel Int
-  deriving (Eq, Show)
+  deriving (Eq, Generic, Show, Hashable)
 
 ordConstraints :: RESTOrdering -> (Handle, Handle) -> OCAlgebra OCType Expr IO
 ordConstraints RESTRPO      solver = bimapConstraints RPO asRPO $ contramap convert (adtRPO solver)
