@@ -668,6 +668,9 @@ evalRESTWithCache cacheRef γ ctx acc rp =
     if se then do
       possibleRWs <- getRWs
       rws <- notVisitedFirst exploredTerms <$> filterM (liftIO . allowed) possibleRWs
+      oldEqualities <- gets evNewEqualities
+      modify $ \st -> st { evNewEqualities = mempty }
+
       -- liftIO $ putStrLn $ (show $ length possibleRWs) ++ " rewrites allowed at path length " ++ (show $ (map snd $ path rp))
       (e', FE fe) <- do
         r@(ec, _) <- eval γ ctx FuncNormal e
@@ -680,12 +683,13 @@ evalRESTWithCache cacheRef γ ctx acc rp =
           acc' = exprsToAdd ++ acc
           eqnToAdd = map (\(eqn, _, _) -> eqn) rws
 
+      newEqualities <- gets evNewEqualities
       smtCache <- liftIO $ readIORef cacheRef
       modify (\st ->
             let evAccum1 = foldr (M.insert e) (evAccum st) exprsToAdd
              in st {
                   evAccum = foldr (uncurry M.insert) evAccum1 eqnToAdd
-                , evNewEqualities  = foldr S.insert (evNewEqualities st) eqnToAdd
+                , evNewEqualities  = foldr S.insert (S.union newEqualities oldEqualities) eqnToAdd
                 , evSMTCache = smtCache
                 , explored = Just $ ExploredTerms.insert
                   (Rewrite.convert e)
@@ -697,7 +701,7 @@ evalRESTWithCache cacheRef γ ctx acc rp =
       acc'' <- if evalIsNewExpr
         then if fe && any isRW (path rp)
           then (:[]) . fst <$> eval γ (addConst (e, e')) NoRW e'
-          else evalRESTWithCache cacheRef γ (addConst (e, e')) acc' (rpEval e')
+          else evalRESTWithCache cacheRef γ (addConst (e, e')) acc' (rpEval newEqualities e')
         else return acc'
 
       foldM (\r rw -> evalRESTWithCache cacheRef γ ctx r (rpRW rw)) acc'' rws
@@ -721,11 +725,11 @@ evalRESTWithCache cacheRef γ ctx acc rp =
       in
         nv ++ v
 
-    rpEval e' =
+    rpEval newEqualities e' =
       let
         c' =
           if any isRW (path rp)
-            then refine (oc rp) (c rp) e e'
+            then foldr (\(e1, e2) ctrs -> refine (oc rp) ctrs e1 e2) (c rp) (S.toList newEqualities)
             else c rp
 
       in
