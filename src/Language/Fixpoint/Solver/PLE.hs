@@ -566,7 +566,15 @@ eval :: Knowledge -> ICtx -> EvalType -> Expr -> EvalST (Expr, FinalExpand)
 eval γ ctx et = go
   where
     go (ELam (x,s) e)   = evalELam γ ctx et (x, s) e
-    go e@EIte{}         = evalIte γ ctx et e
+    go e@EIte{}         = do
+      (e', fe) <- evalIte γ ctx et e
+      let undecidedGuards = case e' of
+            EIte{} -> True
+            _ -> False
+      if undecidedGuards || et /= NoRW  then
+        return (e', fe)
+       else
+        fmap (fe <|>) <$> go e'
     go (ECoerc s t e)   = mapFE (ECoerc s t)  <$> go e
     go e@(EApp _ _)     =
       case splitEAppThroughECst e of
