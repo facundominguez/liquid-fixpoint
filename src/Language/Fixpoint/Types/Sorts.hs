@@ -43,6 +43,7 @@ module Language.Fixpoint.Types.Sorts (
   , finfieldSort
   , sizedBitVecSort
   , mapSort, charSort
+  , optionSort
   , listFTyCon
   , isListTC
   , sizeBv
@@ -595,6 +596,9 @@ finfieldSort = FApp (FTC ffldFTyCon)
 
 symbolFTycon' :: Symbol -> FTycon
 symbolFTycon' = symbolFTycon . dummyLoc
+
+optionSort :: Sort -> Sort
+optionSort = FApp (FTC (symbolFTycon' optionConName))
 
 fTyconSort :: FTycon -> Sort
 fTyconSort c

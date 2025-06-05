@@ -278,6 +278,8 @@ solverPreamble cfg
   ++ boolPreamble cfg
   ++ arithPreamble cfg
   ++ stringPreamble cfg
+  ++ optionPreamble cfg
+  ++ intMapSetIntPreamble cfg
 
 type Preamble = (PreambleCondition, Builder)
 
@@ -314,6 +316,22 @@ stringPreamble _
     , (SAll, bFun' strConcat [fromText string, fromText string] (fromText string))
     ]
 
+optionPreamble :: Config -> [Preamble]
+optionPreamble _
+  = [ (SOnly [Z3, Z3mem], "(declare-datatype Option (par (a) (None (Some (someVal a)))))") ]
+
+
+intMapSetIntPreamble :: Config -> [Preamble]
+intMapSetIntPreamble _ =
+    [ (SOnly [Z3, Z3mem], "(define-fun IntMapSetInt_union_p2p ((oa0 (Option (Set Int))) (oa1 (Option (Set Int)))) (Option (Set Int)) (match oa0 ((None oa1) ((Some _) oa0))))")
+--    , (SOnly [Z3, Z3mem], "(define-fun IntMapSetInt_isSubsetOf_p2p ((oa0 (Option (Set Int))) (oa1 (Option (Set Int)))) Bool (or ((_ is None) oa0) (= oa0 oa1)))")
+--    , (SOnly [Z3, Z3mem], "(define-fun IntMapSetInt_isSubsetOf ((x (Array Int (Option (Set Int)))) (y (Array Int (Option (Set Int))))) Bool (= ((as const (Array Int Bool)) true) ((_ map IntMapSetInt_isSubsetOf_p2p) x y)))")
+    , (SOnly [Z3, Z3mem], "(define-fun IntMapSetInt_difference_p2p ((oa0 (Option (Set Int))) (oa1 (Option (Set Int)))) (Option (Set Int)) (match oa0 ((None None) ((Some _) (match oa1 ((None oa0) ((Some _) None)))))))")
+    , (SOnly [Z3, Z3mem], "(define-fun IntMapSetInt_difference_strict_p2p ((oa0 (Option (Set Int))) (oa1 (Option (Set Int)))) (Option (Set Int)) (match oa0 ((None None) ((Some a0) (match oa1 ((None oa0) ((Some a1) (ite (= a0 a1) None oa0))))))))")
+    , (SOnly [Z3, Z3mem], "(define-fun IntMapSetInt_isSubsetOf ((x (Array Int (Option (Set Int)))) (y (Array Int (Option (Set Int))))) Bool (= ((as const (Array Int (Option (Set Int)))) None) ((_ map IntMapSetInt_difference_strict_p2p) x y)))")
+    , (SOnly [Z3, Z3mem], "(define-fun IntMapSetInt_keys_p2p ((oa (Option (Set Int)))) Bool ((_ is Some) oa))")
+    ]
+
 --------------------------------------------------------------------------------
 -- | Exported API --------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -328,6 +346,7 @@ smt2SmtSort SInt         = "Int"
 smt2SmtSort SReal        = "Real"
 smt2SmtSort SBool        = "Bool"
 smt2SmtSort SString      = fromText string
+smt2SmtSort (SOption a)  = key "Option" (smt2SmtSort a)
 smt2SmtSort (SSet a)     = key "Set" (smt2SmtSort a)
 smt2SmtSort (SBag a)     = key "Bag" (smt2SmtSort a)
 smt2SmtSort (SArray a b) = key2 "Array" (smt2SmtSort a) (smt2SmtSort b)
@@ -437,11 +456,32 @@ interpSymbols :: SMTSolver -> [(Symbol, TheorySymbol)]
 --------------------------------------------------------------------------------
 interpSymbols cfg =
   [
+    -- options
+    interpSym "None"   "None"  (FAbs 0 $ optionSort (FVar 0))
+  , interpSym "Some"   "Some"  (FAbs 0 $ FFunc (FVar 0) $ optionSort (FVar 0))
+  , interpSym "isSome" "(_ is Some)" $ FAbs 0 $ FFunc (optionSort (FVar 0)) boolSort
+  , interpSym "isNone" "(_ is None)" $ FAbs 0 $ FFunc (optionSort (FVar 0)) boolSort
+  , interpSym "someVal" "someVal" $ FAbs 0 $ FFunc (optionSort (FVar 0)) (FVar 0)
+
     -- maps
 
-    interpSym mapDef   mapDef  mapDefSort
+  , interpSym mapDef   mapDef  mapDefSort
   , interpSym mapSel   mapSel  mapSelSort
   , interpSym mapSto   mapSto  mapStoSort
+  , interpSym "IntMapSetInt_default" "(as const (Array Int (Option (Set Int))))" $
+      FFunc (optionSort (setSort intSort)) intMapSetIntSort
+  , interpSym "IntMapSetInt_select" "select" $
+      FFunc intMapSetIntSort $ FFunc intSort (optionSort (setSort intSort))
+  , interpSym "IntMapSetInt_store" "store" $
+      FFunc intMapSetIntSort $ FFunc intSort $ FFunc (optionSort (setSort intSort)) intMapSetIntSort
+  , interpSym "IntMapSetInt_union" "(_ map IntMapSetInt_union_p2p)" $
+      FFunc intMapSetIntSort $ FFunc intMapSetIntSort intMapSetIntSort
+  , interpSym "IntMapSetInt_difference" "(_ map IntMapSetInt_difference_p2p)" $
+      FFunc intMapSetIntSort $ FFunc intMapSetIntSort intMapSetIntSort
+  , interpSym "IntMapSetInt_isSubsetOf" "IntMapSetInt_isSubsetOf" $
+      FFunc intMapSetIntSort $ FFunc intMapSetIntSort boolSort
+  , interpSym "IntMapSetInt_keys" "(_ map IntMapSetInt_keys_p2p)" $
+      FFunc intMapSetIntSort (setSort intSort)
 
   , interpSym arrConstM  "const"  (FAbs 0 $ FFunc (FVar 1) mapArrSort)
   , interpSym arrSelectM "select" (FAbs 0 $ FFunc mapArrSort $ FFunc (FVar 0) (FVar 1))
@@ -597,6 +637,9 @@ interpSymbols cfg =
 
     setBopSort = FAbs 0 $ FFunc (setSort $ FVar 0) $ FFunc (setSort $ FVar 0) (setSort $ FVar 0)
     bagBopSort = FAbs 0 $ FFunc (bagSort $ FVar 0) $ FFunc (bagSort $ FVar 0) (bagSort $ FVar 0)
+
+    intMapSetIntSort :: Sort
+    intMapSetIntSort = FTC (symbolFTycon $ dummyLoc intMapSetIntConName)
 
 bv2i :: SMTSolver -> Int -> Raw
 bv2i Cvc4 _ = "bv2nat"

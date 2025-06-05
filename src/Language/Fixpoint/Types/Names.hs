@@ -102,10 +102,14 @@ module Language.Fixpoint.Types.Names (
   , bagConName
   , arrayConName
   , ffldConName
+  , intMapSetIntConName
+  , optionConName
   , strConName
   , charConName
   , nilName
   , consName
+  , noneName
+  , someName
   , vvName
   , sizeName
   , bitVecName
@@ -656,7 +660,7 @@ boolLConName = "bool"
 funConName   = "->"
 
 
-listConName, listLConName, propConName, _hpropConName, vvName, setConName, mapConName, bagConName, arrayConName, ffldConName :: Symbol
+listConName, listLConName, propConName, _hpropConName, vvName, setConName, mapConName, bagConName, arrayConName, ffldConName, intMapSetIntConName, optionConName  :: Symbol
 listConName   = "[]"
 listLConName  = "List"
 setConName    = "Set_Set"
@@ -664,6 +668,8 @@ mapConName    = "Map_t"
 bagConName    = "Bag_t"
 arrayConName  = "Array_t"
 ffldConName   = "FFld_t"
+intMapSetIntConName = "IntMapSetInt_t"
+optionConName = "Option_t"
 vvName        = "VV"
 propConName   = "Prop"
 _hpropConName = "HProp"
@@ -687,12 +693,13 @@ intbv16Name = "int_to_bv16"
 bv8intName  = "bv8_to_int"
 bv16intName = "bv16_to_int"
 
-nilName, consName, sizeName, bitVecName :: Symbol
+nilName, consName, sizeName, bitVecName, noneName, someName :: Symbol
 nilName       = "nil"
 consName      = "cons"
 sizeName      = "Size"
 bitVecName    = "BitVec"
-
+noneName      = "None"
+someName      = "Some"
 
 mulFuncName, divFuncName :: Symbol
 mulFuncName  = "SMTLIB_OP_MUL"
@@ -726,6 +733,8 @@ prims = S.fromList
   , "Map_union"
   , "Map_default"
   , arrayConName
+  , intMapSetIntConName
+  , optionConName
   -- Currently we parse X in "SizeX" to get the bitvec size
   -- so there is no finite set of names to add here...
   -- , size32Name
@@ -736,6 +745,11 @@ prims = S.fromList
   , "FAppTy"
   , nilName
   , consName
+  , noneName
+  , someName
+  , "isSome"
+  , "isNone"
+  , "someVal"
   ]
 
 {-
